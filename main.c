@@ -11,6 +11,15 @@ int rat(double* arr){
     }
     return 0;
 }
+//Высчитывание суммы
+double sum(double* arr){
+    double sum = 0;
+    for (int i=0; i<N; i++){
+        sum = sum + arr[i];
+    }
+    return sum;
+}
+
 
 int main() {
     double* arr = (double*)malloc((N+1)*sizeof(double));
@@ -18,9 +27,10 @@ int main() {
 
 
 
+
+
     rat(arr);
-    for (int i=0; i<N; i++){
-        printf("%f", arr[i]);
-    }
+    float f = sum(arr);
+    printf("%f", f);
     return 0;
 }
