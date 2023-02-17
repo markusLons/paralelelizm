@@ -31,6 +31,6 @@ int main() {
 
     rat(arr);
     float f = sum(arr);
-    printf("%f", f);
+    printf("%.50f", f);
     return 0;
 }
