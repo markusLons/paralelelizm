@@ -13,6 +13,7 @@ int main() {
     double sums = 0;
     // создание массива для видеокарты
 #pragma acc kernels
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i < N; i++) {
         sums += sin(2 * M_PI * i / N);
     }
@@ -25,7 +26,8 @@ int main() {
     start = clock();
     float *arr2 = (float *) malloc((N + 1) * sizeof(float));
     float sums2 = 0;
-    #pragma acc kernels
+#pragma acc kernels
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i < N; i++) {
         sums2 += sin(2 * M_PI * i / N);
     }
