@@ -9,9 +9,10 @@ int N = 10000000;
 int main() {
 
     double *arr = (double *) malloc((N + 1) * sizeof(double));
-    clock_t start = clock();
+
     double sums = 0;
     // создание массива для видеокарты
+    clock_t start = clock();
 #pragma acc kernels
 #pragma omp parallel for num_threads(4)
     for (int i = 0; i < N; i++) {
@@ -35,5 +36,9 @@ int main() {
     printf("time %f\n", (double)(end - start) / CLOCKS_PER_SEC);
 
     printf("%.50f\n", sums2);
+    // Освобождение памяти
+    free(arr);
+    free(arr2);
+
     return 0;
 }
