@@ -25,30 +25,33 @@ int main() {
     int iter = 0;
     double err = TOLERANCE + 1;
 
-    while (err > TOLERANCE && iter < MAX_ITERATIONS) {
-        err = 0;
+#pragma acc data copyin(old_array[0:ARRAY_SIZE][0:ARRAY_SIZE]), copyout(new_array[0:ARRAY_SIZE][0:ARRAY_SIZE])
+    {
+        while (err > TOLERANCE && iter < MAX_ITERATIONS) {
+            err = 0;
 
-        // Update internal points
-#pragma omp parallel for reduction(max:err)
-        for (int j = 1; j < ARRAY_SIZE - 1; j++) {
-            for (int i = 1; i < ARRAY_SIZE - 1; i++) {
-                new_array[i][j] = 0.25 * (old_array[i+1][j] + old_array[i-1][j]
-                                          + old_array[i][j-1] + old_array[i][j+1]);
-                err = fmax(err, fabs(new_array[i][j] - old_array[i][j]));
+#pragma acc parallel loop reduction(max:err)
+            for (int j = 1; j < ARRAY_SIZE - 1; j++) {
+                for (int i = 1; i < ARRAY_SIZE - 1; i++) {
+                    new_array[i][j] = 0.25 * (old_array[i+1][j] + old_array[i-1][j]
+                                              + old_array[i][j-1] + old_array[i][j+1]);
+                    err = fmax(err, fabs(new_array[i][j] - old_array[i][j]));
+                }
+            }
+
+            // Swap arrays
+            double** temp = old_array;
+            old_array = new_array;
+            new_array = temp;
+
+            iter++;
+
+            if (iter % 100 == 0) {
+                printf("%d, %0.6lf\n", iter, err);
             }
         }
-
-        // Swap arrays
-        double** temp = old_array;
-        old_array = new_array;
-        new_array = temp;
-
-        iter++;
-
-        if (iter % 100 == 0) {
-            printf("%d, %0.6lf\n", iter, err);
-        }
     }
+
 
     printf("result: %d, %0.6lf\n", iter, err);
 
