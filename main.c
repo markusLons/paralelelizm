@@ -1,44 +1,64 @@
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <math.h>
-#include <time.h>
 
-int N = 10000000;
-
+#define ARRAY_SIZE 1024
+#define MAX_ITERATIONS 1000000
+#define TOLERANCE 1e-6
 
 int main() {
+    double** old_array = malloc(ARRAY_SIZE * sizeof(double*));
+    double** new_array = malloc(ARRAY_SIZE * sizeof(double*));
 
-    double *arr = (double *) malloc((N + 1) * sizeof(double));
-
-    double sums = 0;
-    // создание массива для видеокарты
-    clock_t start = clock();
-#pragma acc kernels
-#pragma omp parallel for num_threads(4)
-    for (int i = 0; i < N; i++) {
-        sums += sin(2 * M_PI * i / N);
+    for (int i = 0; i < ARRAY_SIZE; i++) {
+        old_array[i] = calloc(ARRAY_SIZE, sizeof(double));
+        new_array[i] = calloc(ARRAY_SIZE, sizeof(double));
     }
-    clock_t end = clock();
-    printf("time %f\n", (double)(end - start) / CLOCKS_PER_SEC);
-    printf("%.50f\n", sums);
 
+    // Set boundary conditions
+    old_array[0][0] = 10;
+    old_array[0][ARRAY_SIZE-1] = 20;
+    old_array[ARRAY_SIZE-1][0] = 30;
+    old_array[ARRAY_SIZE-1][ARRAY_SIZE-1] = 20;
 
-    // То же самое с float
-    start = clock();
-    float *arr2 = (float *) malloc((N + 1) * sizeof(float));
-    float sums2 = 0;
-#pragma acc kernels
-#pragma omp parallel for num_threads(4)
-    for (int i = 0; i < N; i++) {
-        sums2 += sin(2 * M_PI * i / N);
+    // Perform iterative method
+    int iter = 0;
+    double err = TOLERANCE + 1;
+
+    while (err > TOLERANCE && iter < MAX_ITERATIONS) {
+        err = 0;
+
+        // Update internal points
+#pragma omp parallel for reduction(max:err)
+        for (int j = 1; j < ARRAY_SIZE - 1; j++) {
+            for (int i = 1; i < ARRAY_SIZE - 1; i++) {
+                new_array[i][j] = 0.25 * (old_array[i+1][j] + old_array[i-1][j]
+                                          + old_array[i][j-1] + old_array[i][j+1]);
+                err = fmax(err, fabs(new_array[i][j] - old_array[i][j]));
+            }
+        }
+
+        // Swap arrays
+        double** temp = old_array;
+        old_array = new_array;
+        new_array = temp;
+
+        iter++;
+
+        if (iter % 100 == 0) {
+            printf("%d, %0.6lf\n", iter, err);
+        }
     }
-    end = clock();
-    printf("time %f\n", (double)(end - start) / CLOCKS_PER_SEC);
 
-    printf("%.50f\n", sums2);
-    // Освобождение памяти
-    free(arr);
-    free(arr2);
+    printf("result: %d, %0.6lf\n", iter, err);
+
+    // Free memory
+    for (int i = 0; i < ARRAY_SIZE; i++) {
+        free(old_array[i]);
+        free(new_array[i]);
+    }
+    free(old_array);
+    free(new_array);
 
     return 0;
 }
