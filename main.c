@@ -62,5 +62,7 @@ int main(int argc, char *argv[]) {
     }
 
     const clock_t end_time = clock();
-    const double elapsed_time = (end_time - start_time)
+    const double elapsed_time = (end_time - start_time);
+    printf("Elapsed time: %0.2lf ms\n", elapsed_time);
+    return 0;
 }
