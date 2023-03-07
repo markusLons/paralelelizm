@@ -31,21 +31,21 @@ int main(int argc, char *argv[]) {
     double error = max_toch + 1;
 #pragma acc data copy(arr_pred[:raz][:raz]) create(arr_new[:raz][:raz])
     {
-        while(max_num_iter > num_iter && max_toch < error){
+        while(max_num_iter > num_iter && max_toch < error) {
             error = 0;
 #pragma acc parallel loop reduction(max:error)
-            for(int j = 1; j < raz - 1; j++)  {
+            for(int j = 1; j < raz - 1; j++) {
 #pragma acc loop reduction(max:error)
-                for(int i = 1; i < raz - 1; i++){
-                    arr_new[i][j] = (arr_pred[i-1][j] + arr_pred[i][j-1] + arr_pred[i][j+1]+arr_pred[i+1][j])*0.25;
-                    error = fmax(fabs( arr_pred[i][j]-arr_new[i][j]), error);
+                for(int i = 1; i < raz - 1; i++) {
+                    double temp = (arr_pred[i-1][j] + arr_pred[i][j-1] + arr_pred[i][j+1] + arr_pred[i+1][j]) * 0.25;
+                    error = fmax(fabs(arr_pred[i][j] - temp), error);
+                    arr_new[i][j] = temp;
                 }
             }
-#pragma acc parallel loop
-            for (int j = 1; j < raz - 1; j++) {
-#pragma acc loop
-                for (int i = 1; i < raz - 1; i++) {
-                    arr_pred[j][i] = arr_new[j][i];
+#pragma acc parallel loop collapse(2)
+            for(int j = 1; j < raz - 1; j++) {
+                for(int i = 1; i < raz - 1; i++) {
+                    arr_pred[i][j] = arr_new[i][j];
                 }
             }
             if (num_iter % 10 == 0) {
@@ -54,6 +54,7 @@ int main(int argc, char *argv[]) {
             num_iter++;
         }
     }
+
     printf("Итог программы: %d, %0.6lf\n", num_iter, error);
     clock_t b=clock();
     double d=(double)(b-a)/CLOCKS_PER_SEC;
