@@ -16,8 +16,8 @@ int main(int argc, char *argv[]) {
     const double max_toch = atof(argv[2]);
     const int n = atoi(argv[3]);
 
-    double arr_pred[raz][raz] = {0.0};
-    double arr_new[raz][raz] = {0.0};
+    double arr_pred[raz][raz];
+    double arr_new[raz][raz];
 
     arr_pred[0][0] = 10;
     arr_pred[0][n - 1] = 20;
@@ -29,14 +29,21 @@ int main(int argc, char *argv[]) {
     double error = 0.0;
     int num_iter = 0;
 
-    while (num_iter < max_num_iter && error > max_toch) {
+    while (error > max_toch && num_iter < max_num_iter) {
         error = 0.0;
 
 #pragma omp parallel for reduction(max : error)
         for (int j = 1; j < n - 1; ++j) {
+            double local_error = 0.0;
             for (int i = 1; i < n - 1; ++i) {
-                arr_new[i][j] = (arr_pred[i - 1][j] + arr_pred[i][j - 1] + arr_pred[i][j + 1] + arr_pred[i + 1][j]) * 0.25;
-                error = fmax(fabs(arr_pred[i][j] - arr_new[i][j]), error);
+                arr_new[i][j] =
+                        (arr_pred[i - 1][j] + arr_pred[i][j - 1] + arr_pred[i][j + 1] + arr_pred[i + 1][j]) * 0.25;
+                double diff = fabs(arr_pred[i][j] - arr_new[i][j]);
+                local_error = fmax(local_error, diff);
+            }
+#pragma omp critical
+            {
+                error = fmax(error, local_error);
             }
         }
 
@@ -55,9 +62,5 @@ int main(int argc, char *argv[]) {
     }
 
     const clock_t end_time = clock();
-    const double elapsed_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC * 1000;
-
-    printf("Elapsed time: %0.2lf ms\n", elapsed_time);
-
-    return 0;
+    const double elapsed_time = (end_time - start_time)
 }
