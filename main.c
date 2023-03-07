@@ -1,31 +1,30 @@
-#include <iostream> // Для ввода-вывода на консоль
-#include <cmath> // Для математических операций, например sqrt(), sin() и т.д.
-#include <vector> // Для работы с векторами
-#include <string> // Для работы со строками
-#include <algorithm> // Для работы со стандартными алгоритмами, например sort() и т.д.
-#include <fstream> // Для работы с файлами
-#include <chrono> // Для работы с временем
+#include <stdio.h>  // Для ввода-вывода на консоль
+#include <math.h>   // Для математических операций, например sqrt(), sin() и т.д.
+#include <stdlib.h> // Для работы со строками и преобразований типов
+#include <omp.h>    // Для работы с OpenMP
+#include <time.h>   // Для работы со временем
 
+#define raz 1000
 
 int main(int argc, char *argv[]) {
     if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " max_num_iter max_toch raz\n";
+        fprintf(stderr, "Usage: %s max_num_iter max_toch raz\n", argv[0]);
         return 1;
     }
 
-    const int max_num_iter = std::atoi(argv[1]);
-    const double max_toch = std::atof(argv[2]);
-    const int raz = std::atoi(argv[3]);
+    const int max_num_iter = atoi(argv[1]);
+    const double max_toch = atof(argv[2]);
+    const int n = atoi(argv[3]);
 
-    auto arr_pred = std::vector<std::vector<double>>(raz, std::vector<double>(raz, 0.0));
-    auto arr_new = std::vector<std::vector<double>>(raz, std::vector<double>(raz, 0.0));
+    double arr_pred[raz][raz] = {0.0};
+    double arr_new[raz][raz] = {0.0};
 
     arr_pred[0][0] = 10;
-    arr_pred[0][raz - 1] = 20;
-    arr_pred[raz - 1][raz - 1] = 20;
-    arr_pred[raz - 1][0] = 30;
+    arr_pred[0][n - 1] = 20;
+    arr_pred[n - 1][n - 1] = 20;
+    arr_pred[n - 1][0] = 30;
 
-    const auto start_time = std::chrono::high_resolution_clock::now();
+    const clock_t start_time = clock();
 
     double error = 0.0;
     int num_iter = 0;
@@ -34,31 +33,31 @@ int main(int argc, char *argv[]) {
         error = 0.0;
 
 #pragma omp parallel for reduction(max : error)
-        for (int j = 1; j < raz - 1; ++j) {
-            for (int i = 1; i < raz - 1; ++i) {
+        for (int j = 1; j < n - 1; ++j) {
+            for (int i = 1; i < n - 1; ++i) {
                 arr_new[i][j] = (arr_pred[i - 1][j] + arr_pred[i][j - 1] + arr_pred[i][j + 1] + arr_pred[i + 1][j]) * 0.25;
-                error = std::max(std::fabs(arr_pred[i][j] - arr_new[i][j]), error);
+                error = fmax(fabs(arr_pred[i][j] - arr_new[i][j]), error);
             }
         }
 
 #pragma omp parallel for
-        for (int j = 1; j < raz - 1; ++j) {
-            for (int i = 1; i < raz - 1; ++i) {
+        for (int j = 1; j < n - 1; ++j) {
+            for (int i = 1; i < n - 1; ++i) {
                 arr_pred[j][i] = arr_new[j][i];
             }
         }
 
         if (num_iter % 10 == 0) {
-            std::printf("Номер итерации: %d, ошибка: %0.8lf\n", num_iter, error);
+            printf("Номер итерации: %d, ошибка: %0.8lf\n", num_iter, error);
         }
 
         ++num_iter;
     }
 
-    const auto end_time = std::chrono::high_resolution_clock::now();
-    const auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    const clock_t end_time = clock();
+    const double elapsed_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC * 1000;
 
-    std::printf("Elapsed time: %ld ms\n", elapsed_time);
+    printf("Elapsed time: %0.2lf ms\n", elapsed_time);
 
     return 0;
 }
