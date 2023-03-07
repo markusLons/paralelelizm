@@ -1,70 +1,64 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <time.h>
+#include <iostream> // Для ввода-вывода на консоль
+#include <cmath> // Для математических операций, например sqrt(), sin() и т.д.
+#include <vector> // Для работы с векторами
+#include <string> // Для работы со строками
+#include <algorithm> // Для работы со стандартными алгоритмами, например sort() и т.д.
+#include <fstream> // Для работы с файлами
+#include <chrono> // Для работы с временем
+
 
 int main(int argc, char *argv[]) {
-    int max_num_iter = atoi(argv[1]); // количество итераций
-    double max_toch = atof(argv[2]); // точность
-    int raz = atoi(argv[3]); // размер сетки
-    clock_t a=clock();
-    double **arr_pred= (double **)calloc(raz, sizeof(double *));
-    double **arr_new= (double **)calloc(raz, sizeof(double *));
-
-    for (int i = 0; i < raz; i++) {
-        arr_pred[i] = (double *)calloc(raz, sizeof(double ));
-        arr_new[i] = (double *)calloc(raz, sizeof(double ));
+    if (argc < 4) {
+        std::cerr << "Usage: " << argv[0] << " max_num_iter max_toch raz\n";
+        return 1;
     }
+
+    const int max_num_iter = std::atoi(argv[1]);
+    const double max_toch = std::atof(argv[2]);
+    const int raz = std::atoi(argv[3]);
+
+    auto arr_pred = std::vector<std::vector<double>>(raz, std::vector<double>(raz, 0.0));
+    auto arr_new = std::vector<std::vector<double>>(raz, std::vector<double>(raz, 0.0));
+
     arr_pred[0][0] = 10;
     arr_pred[0][raz - 1] = 20;
     arr_pred[raz - 1][raz - 1] = 20;
     arr_pred[raz - 1][0] = 30;
 
-#pragma acc parallel loop
-    for(int j = 1; j < raz; j++){
-        arr_pred[0][j] = (arr_pred[0][raz - 1] - arr_pred[0][0]) / (raz - 1) + arr_pred[0][j - 1];
-        arr_pred[raz - 1][j] = (arr_pred[raz - 1][raz - 1] - arr_pred[raz - 1][0]) / (raz - 1) + arr_pred[raz - 1][j - 1];
-        arr_pred[j][0] = (arr_pred[raz - 1][0] - arr_pred[0][0]) / (raz - 1) + arr_pred[j - 1][0];
-        arr_pred[j][raz - 1] = (arr_pred[raz - 1][raz - 1] - arr_pred[0][raz - 1]) / (raz - 1) + arr_pred[j - 1][raz - 1];
-    }
+    const auto start_time = std::chrono::high_resolution_clock::now();
+
+    double error = 0.0;
     int num_iter = 0;
-    double error = max_toch + 1;
-#pragma acc data copy(arr_pred[:raz][:raz]) create(arr_new[:raz][:raz])
-    {
-        while(max_num_iter > num_iter && max_toch < error) {
-            error = 0;
-#pragma acc parallel loop reduction(max:error)
-            for(int j = 1; j < raz - 1; j++) {
-#pragma acc loop reduction(max:error)
-                for(int i = 1; i < raz - 1; i++) {
-                    double temp = (arr_pred[i-1][j] + arr_pred[i][j-1] + arr_pred[i][j+1] + arr_pred[i+1][j]) * 0.25;
-                    error = fmax(fabs(arr_pred[i][j] - temp), error);
-                    arr_new[i][j] = temp;
-                }
+
+    while (max_num_iter > num_iter && max_toch < error) {
+        error = 0.0;
+
+#pragma omp parallel for reduction(max : error)
+        for (int j = 1; j < raz - 1; ++j) {
+            for (int i = 1; i < raz - 1; ++i) {
+                arr_new[i][j] = (arr_pred[i - 1][j] + arr_pred[i][j - 1] + arr_pred[i][j + 1] + arr_pred[i + 1][j]) * 0.25;
+                error = std::max(std::fabs(arr_pred[i][j] - arr_new[i][j]), error);
             }
-#pragma acc parallel loop collapse(2)
-            for(int j = 1; j < raz - 1; j++) {
-                for(int i = 1; i < raz - 1; i++) {
-                    arr_pred[i][j] = arr_new[i][j];
-                }
-            }
-            if (num_iter % 10 == 0) {
-                printf("Номер итерации: %d, ошибка: %0.8lf\n", num_iter, error);
-            }
-            num_iter++;
         }
+
+#pragma omp parallel for
+        for (int j = 1; j < raz - 1; ++j) {
+            for (int i = 1; i < raz - 1; ++i) {
+                arr_pred[j][i] = arr_new[j][i];
+            }
+        }
+
+        if (num_iter % 10 == 0) {
+            std::printf("Номер итерации: %d, ошибка: %0.8lf\n", num_iter, error);
+        }
+
+        ++num_iter;
     }
 
-    printf("Итог программы: %d, %0.6lf\n", num_iter, error);
-    clock_t b=clock();
-    double d=(double)(b-a)/CLOCKS_PER_SEC;
-    printf("%.25f время в секундах", d);
-#pragma acc parallel loop
-    for (int i = 0; i < raz; i++) {
-        free(arr_pred[i]);
-        free(arr_new[i]);
-    }
-    free(arr_pred);
-    free(arr_new);
+    const auto end_time = std::chrono::high_resolution_clock::now();
+    const auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+    std::printf("Elapsed time: %ld ms\n", elapsed_time);
+
     return 0;
 }
