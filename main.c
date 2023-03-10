@@ -1,68 +1,69 @@
+//Example 1. Application Using C and cuBLAS: 1-based indexing
+//-----------------------------------------------------------
 #include <stdio.h>
-#include <math.h>
 #include <stdlib.h>
-#include <omp.h>
-#include <time.h>
+#include <math.h>
+#include <cuda_runtime.h>
+#include "cublas_v2.h"
+#define M 6
+#define N 5
+#define IDX2F(i,j,ld) ((((j)-1)*(ld))+((i)-1))
 
-#define raz 1000
+static __inline__ void modify (cublasHandle_t handle, float *m, int ldm, int n, int p, int q, float alpha, float beta){
+    cublasSscal (handle, n-q+1, &alpha, &m[IDX2F(p,q,ldm)], ldm);
+    cublasSscal (handle, ldm-p+1, &beta, &m[IDX2F(p,q,ldm)], 1);
+}
 
-int main(int argc, char *argv[]) {
-    if (argc < 4) {
-        fprintf(stderr, "Usage: %s max_num_iter max_toch raz\n", argv[0]);
-        return 1;
+int main (void){
+    cudaError_t cudaStat;
+    cublasStatus_t stat;
+    cublasHandle_t handle;
+    int i, j;
+    float* devPtrA;
+    float* a = 0;
+    a = (float *)malloc (M * N * sizeof (*a));
+    if (!a) {
+        printf ("host memory allocation failed");
+        return EXIT_FAILURE;
     }
-
-    const int max_num_iter = atoi(argv[1]);
-    const double max_toch = atof(argv[2]);
-    const int n = atoi(argv[3]);
-
-    double arr_pred[raz][raz];
-    double arr_new[raz][raz];
-
-    arr_pred[0][0] = 10;
-    arr_pred[0][n - 1] = 20;
-    arr_pred[n - 1][n - 1] = 20;
-    arr_pred[n - 1][0] = 30;
-
-    const clock_t start_time = clock();
-
-    double error = 0.0;
-    int num_iter = 0;
-
-    while (error > max_toch && num_iter < max_num_iter) {
-        error = 0.0;
-
-#pragma omp parallel for reduction(max : error)
-        for (int j = 1; j < n - 1; ++j) {
-            double local_error = 0.0;
-            for (int i = 1; i < n - 1; ++i) {
-                arr_new[i][j] =
-                        (arr_pred[i - 1][j] + arr_pred[i][j - 1] + arr_pred[i][j + 1] + arr_pred[i + 1][j]) * 0.25;
-                double diff = fabs(arr_pred[i][j] - arr_new[i][j]);
-                local_error = fmax(local_error, diff);
-            }
-#pragma omp critical
-            {
-                error = fmax(error, local_error);
-            }
+    for (j = 1; j <= N; j++) {
+        for (i = 1; i <= M; i++) {
+            a[IDX2F(i,j,M)] = (float)((i-1) * N + j);
         }
-
-#pragma omp parallel for
-        for (int j = 1; j < n - 1; ++j) {
-            for (int i = 1; i < n - 1; ++i) {
-                arr_pred[j][i] = arr_new[j][i];
-            }
-        }
-
-        if (num_iter % 10 == 0) {
-            printf("Iteration: %d, error: %0.8lf\n", num_iter, error);
-        }
-
-        ++num_iter;
     }
-
-    const clock_t end_time = clock();
-    const double elapsed_time = (end_time - start_time);
-    printf("Elapsed time: %0.2lf ms\n", elapsed_time);
-    return 0;
+    cudaStat = cudaMalloc ((void**)&devPtrA, M*N*sizeof(*a));
+    if (cudaStat != cudaSuccess) {
+        printf ("device memory allocation failed");
+        return EXIT_FAILURE;
+    }
+    stat = cublasCreate(&handle);
+    if (stat != CUBLAS_STATUS_SUCCESS) {
+        printf ("CUBLAS initialization failed\n");
+        return EXIT_FAILURE;
+    }
+    stat = cublasSetMatrix (M, N, sizeof(*a), a, M, devPtrA, M);
+    if (stat != CUBLAS_STATUS_SUCCESS) {
+        printf ("data download failed");
+        cudaFree (devPtrA);
+        cublasDestroy(handle);
+        return EXIT_FAILURE;
+    }
+    modify (handle, devPtrA, M, N, 2, 3, 16.0f, 12.0f);
+    stat = cublasGetMatrix (M, N, sizeof(*a), devPtrA, M, a, M);
+    if (stat != CUBLAS_STATUS_SUCCESS) {
+        printf ("data upload failed");
+        cudaFree (devPtrA);
+        cublasDestroy(handle);
+        return EXIT_FAILURE;
+    }
+    cudaFree (devPtrA);
+    cublasDestroy(handle);
+    for (j = 1; j <= N; j++) {
+        for (i = 1; i <= M; i++) {
+            printf ("%7.0f", a[IDX2F(i,j,M)]);
+        }
+        printf ("\n");
+    }
+    free(a);
+    return EXIT_SUCCESS;
 }
